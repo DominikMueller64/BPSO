@@ -33,9 +33,8 @@ position <- rep(T, n_max_ts)
 ##   cor(tbv_ps, fm$u[seq_len(n_ps)])
 ## }
 
-fn <- function(particle, ix_ts_, ix_ps_, y_, G_, tbv_ps_) {
+fn <- function(position, ix_ts_, ix_ps_, y_, G_, tbv_ps_) {
   n_ps <- length(tbv_ps_)
-  position <- particle$position
   if (!any(position))
     return (-Inf)
 
@@ -51,7 +50,7 @@ library(BPSO)
 fm <- bpsoptim(par = rep(FALSE, n_max_ts),
                fn = fn,
                ix_ts_= ix_ts, ix_ps_ = ix_ps, y_= y, G_= G, tbv_ps_ = tbv_ps,
-               control = list('maxit' = 300L, REPORT = 1L, v.max = 5))
+               control = list('maxit' = 30L, REPORT = 1L, v.max = 5))
 
 str(fm$stats)
 

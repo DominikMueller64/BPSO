@@ -13,7 +13,7 @@ initialize_swarm <- function(par, fn, s) {
                      'best_position' = best_position,
                      'best_value' = best_value)
 
-    particle$value <- particle$best_value <- fn(particle)
+    particle$value <- particle$best_value <- fn(particle$position)
     particle
   })
 
@@ -27,7 +27,7 @@ update_swarm <- function(fn, swarm,  w, c_p, c_g) {
 
   for (i in seq_along(swarm$particles)) {
     particle <- swarm$particles[[i]]
-    particle$value <- fn(particle)
+    particle$value <- fn(particle$position)
     n <- length(particle$position)
     ## Compare current performance to its best performance
     if (particle$value > particle$best_value) {
@@ -172,6 +172,7 @@ update_swarm <- function(fn, swarm,  w, c_p, c_g) {
 #' @export
 bpsoptim <- function(par, fn, ..., control = list()) {
 
+  n <- length(par)
   con <- list(trace = TRUE,
               REPORT = 10L,
               'fnscale' = 1.0, maxit = 1000L,
@@ -192,7 +193,6 @@ bpsoptim <- function(par, fn, ..., control = list()) {
   fn1 <- function(par) fn(par, ...) / con$fnscale
 
   ## Re-name parameters
-  n <- length(par)
   trace <- con$trace > 0L
   REPORT <- con$REPORT
   trace_stats <- con$trace.stats
