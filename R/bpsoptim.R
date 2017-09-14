@@ -1,80 +1,3 @@
-initialize_swarm <- function(par, fn, s) {
-  n <- length(par)
-  swarm <- list()
-  swarm$particles <- replicate(n = s, simplify = FALSE, expr = {
-    position <- best_position <- sample(x = c(FALSE, TRUE), size = n, replace = TRUE)
-    velocity <- velocity_0 <- velocity_1 <- numeric(length = n)
-    value <- best_value <- -Inf
-    particle <- list('position' = position,
-                     'velocity_0' = velocity_0,
-                     'velocity_1' = velocity_1,
-                     'velocity' = velocity,
-                     'value' = value,
-                     'best_position' = best_position,
-                     'best_value' = best_value)
-
-    particle$value <- particle$best_value <- fn(particle$position)
-    particle
-  })
-
-  swarm$best_value <- -Inf
-  swarm$best_position <- logical(n)
-  swarm
-}
-
-
-update_swarm <- function(fn, swarm,  w, c_p, c_g) {
-
-  for (i in seq_along(swarm$particles)) {
-    particle <- swarm$particles[[i]]
-    particle$value <- fn(particle$position)
-    n <- length(particle$position)
-    ## Compare current performance to its best performance
-    if (particle$value > particle$best_value) {
-      particle$best_value <- particle$value
-      particle$best_position <- particle$position
-    }
-
-    ## Compare current performance to globally best performance
-    if (particle$value > swarm$best_value) {
-      swarm$best_value <- particle$value
-      swarm$best_position <- particle$position
-    }
-
-    ## Change velocities of the particle
-    d11 <- d01 <- d12 <- d02 <- logical(length = n)
-    c1r1 <- runif(n = n, min = 0, max = c_p)
-    c2r2 <- runif(n = n, min = 0, max = c_g)
-    pbp <- particle$best_position
-    gbp <- swarm$best_position
-
-    d11[pbp] <- c1r1[pbp]
-    d01[pbp] <- -c1r1[pbp]
-    d01[!pbp] <- c1r1[!pbp]
-    d11[!pbp] <- -c1r1[!pbp]
-    d12[gbp] <- c2r2[gbp]
-    d02[gbp] <- -c2r2[gbp]
-    d02[!gbp] <- c2r2[!gbp]
-    d12[!gbp] <- -c2r2[!gbp]
-
-    particle$velocity_1 <- w * particle$velocity_1 + d11 + d12
-    particle$velocity_0 <- w * particle$velocity_0 + d01 + d02
-
-    ## Change velocities of bit-change
-    pp <- particle$position
-    particle$velocity[!pp] <- particle$velocity_1[!pp]
-    particle$velocity[pp] <- particle$velocity_0[pp]
-
-    ## Update position and value
-    s <- 1.0 / (1.0 + exp(-particle$velocity))
-    logsub <- runif(n = n) < s
-    particle$position[logsub] <- !particle$position[logsub]
-    ## leave unchanged otherwise
-    swarm$particles[[i]] <- particle
-  }
-  swarm
-}
-
 #' @title Binary Particle Swarm Optimization
 #'
 #' @description This is an implementation of the binary particle swarm optimization as
@@ -160,17 +83,51 @@ update_swarm <- function(fn, swarm,  w, c_p, c_g) {
 #'
 #' \references{
 #' Algorithm is taken from:
-#'
 #' Khanesar, M.A et al. (2007)
-#' \url{http://zeus.inf.ucv.cl/~bcrawford/MII-748-METAHEURISTICAS/Papers_BinaryMH/A%20novel%20BPSO.pdf}
 #'
 #'  Default parameters are taken from:
-#'  Cortez, P. (2014)
-#'  \url{http://www.springer.com/de/book/9783319082622}
+#'  Cortez, P. (2014) (\url{http://www.springer.com/de/book/9783319082622})
 #' }
 #'
+#' @examples
+#' library('BPSO')
+#'
+#' set.seed(123L)
+#' n <- 30L
+#' m <- 100L
+#' x <- replicate(n, sample(x = c(0L, 1L), size = m, replace = TRUE), simplify = FALSE)
+#'
+#' fn <- function (position) {
+#'   if(!any(position))
+#'     return(-Inf)
+#'
+#'   tmp <- do.call(what = rbind, args = x[position])
+#'   tmp <- apply(X = tmp, MARGIN = 2L, FUN = var)
+#'   val <- sum(tmp, na.rm = TRUE)
+#'   if (is.na(val)) return(-Inf)
+#'   val
+#' }
+#'
+#' fm <- bpsoptim(par = rep(FALSE, m), fn = fn,
+#'                control = list(maxit = 100L, REPORT = 5L))
+#'
+#' str(fm)
+#'
+#' @importFrom stats runif
+#' @import futile.logger
 #' @export
-bpsoptim <- function(par, fn, ..., control = list()) {
+bpsoptim <- function(par, fn, ..., control = list(), debug = FALSE) {
+
+  ## Get loggers
+  flog.logger('console', INFO) ## logger for informative messages
+
+  logfile <- 'bpso.log'
+  if (file.exists(logfile)) file.remove(logfile) ## Remove any previous logfile
+  flog.logger('logfile', DEBUG, appender = appender.file(logfile)) ## logger for debugging
+
+  if (!debug) {
+    flog.threshold(0L, name = 'debug')
+  }
 
   n <- length(par)
   con <- list(trace = TRUE,
@@ -233,8 +190,10 @@ bpsoptim <- function(par, fn, ..., control = list()) {
         tmp <- lapply(X = swarm$particles, FUN = function(x) 1.0 / (1.0 + exp(-x$velocity)))
         prob_bit_change <- mean(Reduce(f = `+`, x = tmp) / length(tmp))
 
-        message(sprintf("iteration = %4d | value = %.3f | P(change) = %1.3f",
-                        it, swarm$best_value, prob_bit_change))
+        flog.info('iteration = %4d | value = %.3f | P(change) = %1.3f',
+                  it, swarm$best_value, prob_bit_change,
+                  name = 'info')
+
       }
     }
 
@@ -264,90 +223,3 @@ bpsoptim <- function(par, fn, ..., control = list()) {
        'stats' = if (trace_stats) trace_stats_ret else NULL
        )
 }
-
-## initialize_swarm <- function(n, n_particles, prob = 0.5, fun) {
-##   swarm <- list()
-##   swarm$particles <- replicate(n = n_particles, simplify = FALSE, expr = {
-##     position <- best_position <- sample(x = c(FALSE, TRUE), size = n, replace = TRUE,
-##                                         prob = c(1.0 - prob, prob))
-##     velocity <- runif(n = n, min = 0, max = 1)
-##     value <- best_value <- NA_real_
-##     particle <- list('position' = position,
-##                      'velocity' = velocity,
-##                      'value' = NA_real_,
-##                      'best_position' = best_position,
-##                      'best_value' = NA_real_)
-
-##     particle$value <- particle$best_value <- fun(particle)
-##     particle
-##   })
-
-##   values <- vapply(X = swarm$particles, FUN = function(x) x$value, FUN.VALUE = numeric(1L))
-##   swarm$best_value <- max(values)
-##   swarm$best_position <- swarm$particles[[which.max(values)]]$position
-##   swarm
-## }
-
-
-## update_swarm <- function(swarm,  w, c_p, c_g, fun) {
-
-##   update_particle <- function(particle) {
-##     n <- length(particle$position)
-##     r_p <- runif(n = n, min = 0, max = 1)
-##     r_g <- runif(n = n, min = 0, max = 1)
-##     velocity_star <- w * particle$velocity +
-##       c_p * r_p * (particle$best_position - particle$position) +
-##       c_g * r_g * (swarm$best_position - particle$position)
-##     s <- 1.0 / (1.0 + exp(-velocity_star))
-##     r <- runif(n = n, min = 0, max = 1)
-##     logsub <- r < s
-
-##     ## Update position and value
-##     particle$position[logsub] <- TRUE
-##     particle$position[!logsub] <- FALSE
-##     particle$value <- fun(particle)
-
-##     ## Update best_position and best_value
-##     if (particle$value > particle$best_value) {
-##       particle$best_position <- particle$position
-##       particle$best_value <- particle$value
-##     }
-
-##     particle
-##   }
-
-##   for (i in seq_along(swarm$particles)) {
-##     swarm$particles[[i]] <- update_particle(particle = swarm$particles[[i]])
-##   }
-
-##   values <- vapply(X = swarm$particles, FUN = function(x) x$value, FUN.VALUE = numeric(1L))
-##   max_ix <- which.max(values)
-##   if (values[max_ix] > swarm$best_value) {
-##     swarm$best_value <- values[max_ix]
-##     swarm$best_position <- swarm$particles[[max_ix]]$position
-##   }
-
-##   swarm
-## }
-
-
-## BPSO <- function(fun, n, n_iter, n_particles = floor(10.0 + 2.0 * sqrt(n)),
-##                  w = 1.0 / (2.0 * log(2.0)), c_p = 1.0 + log(2.0),
-##                  c_g = 1.0 + log(2.0), verbose = TRUE) {
-
-##   ## Initialization
-##   swarm <- initialize_swarm(n = n, n_particles = n_particles, prob = 0.0, fun = fun)
-
-##   ## Evolution
-##   for (iter in seq_len(n_iter)) {
-
-##     if (verbose && (iter == 1L || iter %% 5L == 0L)) {
-##       cat(sprintf("iteration: %5d | best value = %.3f\n", iter, swarm$best_value))
-##     }
-
-##     swarm <- update_swarm(swarm = swarm, w = w, c_p = c_p,
-##                           c_g = c_g, fun = fun)
-##   }
-##   list('value' = swarm$best_value,
-##        'position' = swarm$best_position)
-## }

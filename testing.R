@@ -95,7 +95,6 @@ str(fm$stats)
 ## u$position
 ## var(X[u$position,]%*%alpha)
 
-
 ## optim()
 ## ?optim
 
@@ -121,3 +120,35 @@ str(fm$stats)
 ##     ## ## summary(pca)
 ##     ## ## str(pca$rotation)
 ##     ## biplot(pca, xlim = c(-0.5, 0.5), ylim = c(-0.5, 0.5))
+
+
+
+set.seed(123L)
+n <- 30L
+m <- 100L
+x <- replicate(n, sample(x = c(0L, 1L), size = m, replace = TRUE), simplify = FALSE)
+
+fn <- function (position) {
+  if(!any(position))
+    return(-Inf)
+
+  tmp <- do.call(what = rbind, args = x[position])
+  mean(apply(X = tmp, MARGIN = 2L, FUN = var))
+}
+
+fm <- bpsoptim(par = rep(FALSE, m), fn = fn,
+               control = list(maxit = 100L, REPORT = 5L))
+
+str(fm)
+
+
+
+
+
+
+
+
+
+
+
+
